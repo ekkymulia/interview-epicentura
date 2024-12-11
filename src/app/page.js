@@ -93,7 +93,7 @@ export default function Home() {
               </button>
             </div>
           </div>
-          <div className="bg-white pt-8 p-6 rounded-lg shadow-lg mt-6"> {/* Added mt-6 for spacing between button and table */}
+          <div className="bg-white pt-8 p-6 rounded-lg shadow-lg mt-6"> 
             {loading ? (
               <p className="text-center">Loading...</p>
             ) : error ? (
