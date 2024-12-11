@@ -21,6 +21,7 @@ export async function POST(request) {
     try {
         const data = await request.json();
 
+        // Destructure and validate incoming data
         const {
             unit,
             ruang_meeting,
@@ -34,51 +35,53 @@ export async function POST(request) {
             jenis_snack_sore,
             nominal_konsumsi,
         } = data;
-      
-        // Validate required fields
-        const missingFields = [];
-        [
-            'unit',
-            'ruang_meeting',
-            'kapasitas',
-            'tanggal_rapat',
-            'waktu_mulai',
-            'waktu_selesai',
-            'jumlah_peserta',
-            'jenis_snack_siang',
-            'jenis_makan_siang',
-            'jenis_snack_sore',
-            'nominal_konsumsi',
-        ].forEach((field) => {
-            if (!data[field]) missingFields.push(field);
-        });
 
+        // Validate required fields
+        if (!unit || !ruang_meeting || !kapasitas || !tanggal_rapat || !waktu_mulai || !waktu_selesai || !jumlah_peserta || !nominal_konsumsi) {
+            return createResponse({ error: 'Missing required fields' }, 400);
+        }
+
+        // Validate numeric fields
+        if (isNaN(kapasitas) || isNaN(jumlah_peserta) || isNaN(nominal_konsumsi)) {
+            return createResponse({ error: 'kapasitas, jumlah_peserta, and nominal_konsumsi must be numbers' }, 400);
+        }
+
+        // Validate date and time formats
+        const waktuMulaiDatetime = new Date(`${tanggal_rapat}T${waktu_mulai}:00`);
+        const waktuSelesaiDatetime = new Date(`${tanggal_rapat}T${waktu_selesai}:00`);
+
+        if (isNaN(waktuMulaiDatetime) || isNaN(waktuSelesaiDatetime)) {
+            return createResponse({ error: 'Invalid waktu_mulai or waktu_selesai format.' }, 400);
+        }
+
+        // Ensure waktu_selesai is after waktu_mulai
+        if (waktuSelesaiDatetime <= waktuMulaiDatetime) {
+            return createResponse({ error: 'waktu_selesai must be after waktu_mulai' }, 400);
+        }
+
+        // Create the bill in the database
         const bill = await prisma.bill.create({
             data: {
                 unit,
                 ruang_meeting,
-                kapasitas,
-                tanggal_rapat,
-                waktu_mulai,
-                waktu_selesai,
-                jumlah_peserta,
-                jenis_snack_siang,
-                jenis_makan_siang,
-                jenis_snack_sore,
-                nominal_konsumsi,
+                kapasitas: parseInt(kapasitas, 10),
+                tanggal_rapat: new Date(tanggal_rapat),
+                waktu_mulai: waktuMulaiDatetime,
+                waktu_selesai: waktuSelesaiDatetime,
+                jumlah_peserta: parseInt(jumlah_peserta, 10),
+                jenis_snack_siang: jenis_snack_siang ? 'True' : 'False',
+                jenis_makan_siang: jenis_makan_siang ? 'True' : 'False',
+                jenis_snack_sore: jenis_snack_sore ? 'True' : 'False',
+                nominal_konsumsi: parseFloat(nominal_konsumsi),
             },
         });
 
-        return createResponse(
-            { message: 'Bill created successfully', bill },
-            201
-        );
+        // Return success message
+        return createResponse({ message: 'Bill created successfully', bill }, 201);
+
     } catch (error) {
-        console.error(error);
-        return createResponse(
-            { error: 'Internal Server Error' },
-            500
-        );
+        console.error('Error creating bill:', error);
+        return createResponse({ error: 'Internal Server Error' }, 500);
     } finally {
         await prisma.$disconnect();
     }
@@ -87,24 +90,20 @@ export async function POST(request) {
 // GET handler
 export async function GET(request) {
     try {
-        const url = new URL(request.url);
-        const billId = url.searchParams.get('id');
+        // Fetch all records
+        const bills = await prisma.bill.findMany();
 
-        if (!billId) {
-            return createResponse({ error: 'Missing id parameter' }, 400);
+        // If no records found, return a 404 response
+        if (!bills || bills.length === 0) {
+            return createResponse(
+                { error: 'No records found' },
+                404
+            );
         }
 
-        const bill = await prisma.bill.findUnique({
-            where: { id: parseInt(billId, 10) },
-        });
-
-        if (!bill) {
-            return createResponse({ error: 'Record Not Found' }, 404);
-        }
-
-        return createResponse(bill);
+        return createResponse(bills);
     } catch (error) {
-        console.error(error);
+        console.error('Error fetching bills:', error);
         return createResponse(
             { error: 'Internal Server Error' },
             500
